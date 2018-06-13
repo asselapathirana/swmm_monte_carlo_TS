@@ -3,8 +3,8 @@
 # from swmm5 import swmm5 as sw  # old
 import errno
 # run python with -O to get 'debug' behavior (single thread etc.)
-# in wing ide: Project properties > Dubug/Execute > Python Options >
-# Custom > -O or -OO
+# in wing ide: 
+# Project properties > Dubug/Execute > Python Options > Custom > -O or -OO
 # import matplotlib
 # matplotlib.use('GTKAgg')
 # import matplotlib.pyplot as plt
@@ -134,9 +134,8 @@ def deleteSWMMfiles(swmminputfile, rptfile, binfile):
         pass
 
 
-def swmmWrite(fillers, linestring, outfile):
+def swmmWrite(params, linestring, outfile):
 
-    params = parse_parameters(fillers)
     import pyratemp
     pt = pyratemp.Template(linestring)
     linestring = pt(**params)
@@ -159,7 +158,7 @@ def parse_parameters(fillers):
     params = {}
     for filler in fillers:
         ct = ct + 1
-        word = "v%(f)i" % {"f": ct}
+        word = "data_%(f)i" % {"f": ct}
         params[word] = filler
     return params
 
@@ -181,6 +180,20 @@ class SwmmEA(threading.Thread):
 
     # def __init__(self):
         # QtCore.QThread.__init__(self)
+    
+    def read_lists(self):
+        self.dataroot=self.parameters.dataroot
+        self.data={}
+        for root, dirs, files in os.walk(self.dataroot):
+            for dir_ in sorted(dirs):
+                for r,d,f in os.walk(os.path.join(root,dir_)):
+                    self.data[dir_]=[os.path.join(os.path.abspath(r),i) for i in sorted(f)]
+        print ("Summary of data {} data directories found:".format(len(self.data.keys())))
+        for d in self.data.keys():
+            print()
+            print("directory: {} with {} files like ..".format(d, len(self.data[d])), *(self.data[d][:3]), sep='\n- ')
+     
+    
 
     def log(self, logfile):
         import logging
@@ -218,16 +231,7 @@ class SwmmEA(threading.Thread):
             self.prng = Random(parameters.seed)
         else:
             self.prng = None
-        self.setCDFs()
-
-    def setCDFs(self):
-        self.cdfs = []
-        for cdf in self.parameters.cdfs:
-            self.cdfs.append(
-                cdffn(
-                    os.path.join(
-                        self.parameters.datadirectory,
-                        cdf)))
+        self.outputfilecounter=0
 
     def initialize(self):
         # check the simulation type. If it is a one of calibration,
@@ -236,6 +240,12 @@ class SwmmEA(threading.Thread):
     @timing
     def run(self):
         self.runMonteCarlo()
+        
+    def writeOutput(self, r):
+        self.outputfilecounter +=1 # increment counter
+        with open(self.parameters.outputfilepattern.format(self.outputfilecounter),"w") as f:
+            for item in r:
+                f.write("%s\n" % item)
 
     def runMonteCarlo(self):
         parameters = self.parameters
@@ -261,8 +271,10 @@ class SwmmEA(threading.Thread):
         results = np.array([])
 
         def f():
-            return [[c.getval(prng.random()) for c in self.cdfs],
-                    self.linestring, self.parameters]
+            params={}
+            for h,lst in self.data.items():
+                params[h]=prng.choice(lst)
+            return params, self.linestring, self.parameters
 
         with open(parameters.outputfile, 'w') as file:
             file.write('')
@@ -278,6 +290,7 @@ class SwmmEA(threading.Thread):
         if parameters.num_cpus == 1:
             for n in range(parameters.nruns):
                 r = _getSwmmValue(f())
+                self.writeOutput(r)
                 v = max(r)
                 results = np.append(results, v)
         else:
@@ -290,6 +303,8 @@ class SwmmEA(threading.Thread):
                 arguments = [f() for x in range(parameters.num_cpus * PARTS)]
                 r = pool.map(_getSwmmValue, arguments)
                 v = [max(f) for f in r]
+                for f in r:
+                    self.writeOutput(f)
                 results = np.append(results, v)
                 with open(parameters.outputfile, 'ab') as file:
                     np.savetxt(file, v, fmt="%10.5f")
@@ -333,6 +348,7 @@ def main_function():
     # app = QtWidgets.QApplication(sys.argv)
     swmmea = SwmmEA()
     swmmea.setParams(parameters=parameters, display=True)
+    swmmea.read_lists()
     # when testing run this in single thread. To do so, call .run directly.
     if __debug__:
         print("Running without threading.")
