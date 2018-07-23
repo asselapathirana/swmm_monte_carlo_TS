@@ -115,6 +115,7 @@ def swmmCost(fillers, linestring, outfile, parameters):
 def swmmRun(swmminputfile, parameters):
     st = SWMM5Simulation(swmminputfile, clean=True)
     results = np.array(list(st.Results(*parameters.swmmResultCodes)))
+    st.clean()
     return results
 
 
