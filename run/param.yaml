@@ -23,6 +23,9 @@ queuesize: 5 # How many simulations are fed into each process in the process poo
 
 ## Other information 
 datadirectory: "../data" # directory with data (this is where template file should be)
+correlated_data: ["data_2", "data_3", "data_4", ] # If these are used, the directories 
+# (a) should have files with identical names! (e.g. data5/flow_2001.dat, data6/flow_2001.dat) (obviously with different data!)
+# (b) 
 tmpdirectory: "../tmp"   # temporary storage. 
 outputfile: "../run/outputx.dat"
 outputfilepattern: "../results/output_{:04d}.txt" # the pattern to use to write output files.

@@ -273,8 +273,19 @@ class SwmmEA(threading.Thread):
 
         def f():
             params={}
+            done=False
             for h,lst in self.data.items():
-                params[h]=prng.choice(lst)
+                if(parameters.correlated_data and h in parameters.correlated_data):
+                    if done: 
+                        pass # not the first correlated value. just use the previous value
+                    else:
+                        done=True # first correlated item. Generate a value
+                        rv=prng.randint(0,len(lst)-1)
+                        
+                else:
+                    rv=prng.randint(0,len(lst)-1)          
+                params[h]=lst[rv]
+                
             return params, self.linestring, self.parameters
 
         with open(parameters.outputfile, 'w') as file:
